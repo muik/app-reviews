@@ -1,0 +1,171 @@
+# encoding: utf-8
+require "app-reviews-crawler/version"
+require 'httpclient'
+require 'gdata'
+require 'active_support/core_ext'
+require 'nokogiri'
+require 'open-uri'
+require 'rexml/document'
+include REXML
+
+
+module ReviewCrawler
+  def initialize(app_id)
+    @app_id = app_id
+  end
+
+  def set_last_date(date)
+    @last_date = date
+  end
+
+  def last_date
+    @last_date
+  end
+end
+
+class AppStoreReviewPage
+  def initialize(text, page)
+    @doc = Nokogiri::XML(text)
+    @page = page
+  end
+
+  def items
+    path = "Document > View > ScrollView > VBoxView > View > MatrixView > VBoxView > VBoxView > VBoxView"
+    @doc.css(path).each do |link|
+      begin
+        review = parse link
+        next if review.nil?
+        break unless yield review
+      rescue Exception => e
+        print_parse_error e, link
+      end
+    end
+  end
+
+  def last_page
+    @doc.css("MatrixView > VBoxView > VBoxView > HBoxView:nth-child(2) > TextView > SetFontStyle").each do |link|
+      link.content.split(' ').last.to_i 
+    end
+  end
+
+  private
+  def parse(link)
+    node = link.css('TextView > SetFontStyle')
+    date = node[2].content.gsub("\n", '').strip
+    index = date.rindex('- ')
+    return if index.nil?
+    index += 1
+    date = date[index..-1].strip
+    name_el = node.css('GotoURL > b')
+    title_el = node[0].css('b')
+    name = name_el.first.content.strip
+    title = title_el.first.content
+    text = node[3].content.strip
+    node = link.css('HBoxView > HBoxView > HBoxView')
+    rating = node.attr('alt').value
+
+    {
+      title: title,
+      name: name,
+      text: text,
+      rating: rating,
+      date: date,
+    }
+  end
+
+  def print_parse_error(e, link)
+    puts e
+    puts e.backtrace
+    puts "page: #{@page}"
+    puts link
+  end
+end
+
+class AppStoreReviews
+  include ReviewCrawler
+  include Enumerable
+
+  def set_page(start_page, end_page)
+    @start_page = start_page
+    @end_page = end_page
+  end
+
+  def set_from_date(date)
+    @from_date = date
+  end
+
+  def each
+    unless @list.nil?
+      return @list.each do |item|
+        yield item
+      end
+    end
+
+    @list = []
+    country_codes = [143441, 143466, 143463]
+    country_codes.each do |country_code| 
+      get_reviews(country_code) do |review|
+        @list << review
+        yield review
+      end
+    end
+  end
+
+  def last
+    @list.last
+  end
+
+  private
+  def get_reviews(country)
+    (@start_page..@end_page).each do |page|
+      url = "http://phobos.apple.com/WebObjects/MZStore.woa/wa/viewContentsUserReviews?sortOrdering=4&onlyLatestVersion=false&sortAscending=true&pageNumber=#{(page - 1)}&type=Purple+Software&id=#{@app_id}"
+
+      f = open(url,	"User-Agent" => "iTunes-iPhone/2.2 (2)", "X-Apple-Store-Front" => "#{country}-1") 
+#      File.new('review.xml', 'w').puts f.read
+#      exit
+      review_page = AppStoreReviewPage.new f.read, page
+      break unless review_page.items do |item|
+        return false if Date.parse(item[:date]) < @from_date
+        yield item
+      end
+      p review_page.last_page
+      p page + 1
+
+      break if review_page.last_page < page + 1
+    end
+  end
+end
+
+class AppReviewsCrawler
+  def execute(argv)
+    return print_usage unless validate argv
+    store, app_id, from_date_str = argv
+    start_page = 1
+    end_page = 10000
+    from_date = Date.parse(from_date_str)
+    puts "store: #{store}"
+    puts "app_id: #{app_id}"
+    puts "from_date: #{from_date}"
+    puts "page: #{start_page} ~ #{end_page}"
+
+    reviews = AppStoreReviews.new app_id
+    reviews.set_page start_page, end_page
+    reviews.set_from_date from_date
+    require 'yaml'
+    reviews.each do |item|
+      puts item.to_yaml
+    end
+
+    puts "Review Count: #{reviews.count}"
+    puts "Review Last Date: #{reviews.last[:date]}"
+  end
+
+  def validate(argv)
+    return false if argv.size < 3
+    true
+  end
+
+  def print_usage
+    puts "USAGE: app-reviews-crawler appstore|play|tstore store_app_id from_date"
+  end
+end
