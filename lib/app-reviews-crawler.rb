@@ -1,5 +1,5 @@
 # encoding: utf-8
-require "app-reviews-crawler/version"
+require "app-reviews/version"
 require 'app_store_reviews'
 require 'play_store_reviews'
 require 'tstore_reviews'
@@ -48,5 +48,8 @@ class AppReviewsCrawler
 
   def print_usage
     puts "USAGE: app-reviews-crawler appstore|play|tstore store_app_id from_date"
+    puts "example# app-reviews-crawler appstore 383844387 2012-03-26"
+    puts "example# app-reviews-crawler play com.thinkreals.pocketstyle2 2012-03-26"
+    puts "example# app-reviews-crawler tstore 0000033534 2012-03-26"
   end
 end

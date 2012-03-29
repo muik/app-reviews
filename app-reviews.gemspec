@@ -1,5 +1,5 @@
 # -*- encoding: utf-8 -*-
-require File.expand_path('../lib/app-reviews-crawler/version', __FILE__)
+require File.expand_path('../lib/app-reviews/version', __FILE__)
 
 Gem::Specification.new do |gem|
   gem.authors       = ["Mu-ik Jeon"]
@@ -11,7 +11,7 @@ Gem::Specification.new do |gem|
   gem.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
   gem.files         = `git ls-files`.split("\n")
   gem.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
-  gem.name          = "app-reviews-crawler"
+  gem.name          = "app-reviews"
   gem.require_paths = ["lib"]
-  gem.version       = App::Reviews::Crawler::VERSION
+  gem.version       = AppReviews::VERSION
 end
